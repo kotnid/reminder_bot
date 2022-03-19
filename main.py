@@ -4,6 +4,9 @@ from os import environ
 from telebot import TeleBot
 from threading import Thread
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import asyncio
+
 # logging config 
 basicConfig(level= INFO,
             format= '%(asctime)s %(levelname)s %(message)s',
@@ -24,3 +27,7 @@ bot = TeleBot(botToken,  parse_mode=None)
 if __name__ == "__main__":
     Thread(target=bot.infinity_polling, name='bot_infinity_polling', daemon=True).start()
     
+    scheduler = AsyncIOScheduler()
+    Thread(target=scheduler.start , name='scheduler.start' , daemon=True).start()
+
+    asyncio.get_event_loop().run_forever()
