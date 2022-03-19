@@ -21,7 +21,34 @@ job_db = db['jobs']
 botToken = environ['token']
 bot = TeleBot(botToken,  parse_mode=None)
 
+def send_message(id , message):
+    bot.send_message(id , message)
 
+# check if account is created 
+def check_ac(message):
+    id = message.id
+    myquery = {'_id' : id}
+    if job_db.count_documents(myquery) == 0 :
+            data = {'_id' : id , 'name' : message.first_name , 'jobs':[] }
+            info("User {} with id {} created account".format(message.first_name , str(id)))
+            job_db.insert_one(data)
+
+
+@bot.message_handler(commands=['add'])
+def add(message):
+    check_ac(message.from_user)
+    text = message.text.split()[1:]
+    scheduler.add_job(send_message, 'interval', id='temp' , seconds=10 , kwargs={"id" : message.from_user.id , "message":str(text)})
+
+    myquery = {'_id' : message.from_user.id}
+    data = job_db.find_one(myquery)
+
+    data['jobs'].append({'id' : 'temp' , 'type' : 'interval' , 'seconds' : 10 , 'message' : str(text)}) 
+    job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
+
+@bot.message_handler(commands=['check'])
+def check(message):
+    bot.reply_to(message , scheduler.get_job('temp'))
 
 # start both job 
 if __name__ == "__main__":
