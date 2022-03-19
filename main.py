@@ -60,6 +60,23 @@ def check(message):
 
     bot.reply_to(message , msg)
 
+# remove reminder
+@bot.message_handler(commands=['remove_re'])
+def remove(message):
+    check_ac(message.from_user)
+    text = message.text.split()[1]
+    
+    print(text)
+
+    myquery = {'_id' : message.from_user.id}
+    data = job_db.find_one(myquery)
+
+    for job in data['jobs']:
+        if text == job['id']:
+            data['jobs'].remove(job)
+            break
+    
+    job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
 
 # start both job 
 if __name__ == "__main__":
