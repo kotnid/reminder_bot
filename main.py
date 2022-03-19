@@ -33,22 +33,33 @@ def check_ac(message):
             info("User {} with id {} created account".format(message.first_name , str(id)))
             job_db.insert_one(data)
 
-
-@bot.message_handler(commands=['add'])
+# add reminder
+@bot.message_handler(commands=['add_re'])
 def add(message):
     check_ac(message.from_user)
     text = message.text.split()[1:]
-    scheduler.add_job(send_message, 'interval', id='temp' , seconds=10 , kwargs={"id" : message.from_user.id , "message":str(text)})
+    scheduler.add_job(send_message, 'interval', id='temp' , seconds=30 , kwargs={"id" : message.from_user.id , "message":str(text)})
 
     myquery = {'_id' : message.from_user.id}
     data = job_db.find_one(myquery)
 
-    data['jobs'].append({'id' : 'temp' , 'type' : 'interval' , 'seconds' : 10 , 'message' : str(text)}) 
+    data['jobs'].append({'id' : 'temp' , 'type' : 'interval' , 'seconds' : 30 , 'message' : str(text)}) 
     job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
 
-@bot.message_handler(commands=['check'])
+# check reminder
+@bot.message_handler(commands=['check_re'])
 def check(message):
-    bot.reply_to(message , scheduler.get_job('temp'))
+    check_ac(message.from_user)
+
+    myquery = {'_id' : message.from_user.id}
+    data = job_db.find_one(myquery)
+
+    msg = 'Here is job scheduled : '+'\n'
+    for job in data['jobs']:
+        msg += '{} : {}'.format(job['id'] , job['message']) + '\n'
+
+    bot.reply_to(message , msg)
+
 
 # start both job 
 if __name__ == "__main__":
@@ -57,4 +68,7 @@ if __name__ == "__main__":
     scheduler = AsyncIOScheduler()
     Thread(target=scheduler.start , name='scheduler.start' , daemon=True).start()
 
-    asyncio.get_event_loop().run_forever()
+    try:
+        asyncio.get_event_loop().run_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
