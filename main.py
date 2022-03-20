@@ -26,6 +26,7 @@ job_db = db['jobs']
 botToken = environ['token']
 bot = TeleBot(botToken,  parse_mode=None)
 
+# function run when on time
 def send_message(id , message):
     bot.send_message(id , message)
 
@@ -38,7 +39,7 @@ def check_ac(message):
             info("User {} with id {} created account".format(message.first_name , str(id)))
             job_db.insert_one(data)
 
-
+# temp storage of date
 class Reminder:
     def __init__ (self , id):
         self.id = id
@@ -53,8 +54,8 @@ def add(message):
 
     bot.send_message(message.from_user.id , 'What is the message of the reminder ? (E.g. Watch k-on now)')
     bot.register_next_step_handler_by_chat_id(message.from_user.id , process_msg_step)
-  
-  
+
+# ask type of job
 def process_msg_step(message):
     reminder = Reminder(message.from_user.id)
     reminder.msg = message.text
@@ -68,8 +69,7 @@ def process_msg_step(message):
     bot.send_message(message.from_user.id , 'date or interval or cron ?' , reply_markup = markup)
     bot.register_next_step_handler_by_chat_id(message.from_user.id , process_type_step)
     
-    
-
+# get type of job
 def process_type_step(message):
     if message.text == 'interval':
         bot.send_message(message.from_user.id , 'Interval how much? (E.g. h 2 -> each 2 hour run)')
@@ -86,6 +86,7 @@ def process_type_step(message):
         bot.reply_to(message , 'Invalid input , pls try again')
         bot.register_next_step_handler_by_chat_id(message.from_user.id , process_type_step)
 
+# add date type job
 def process_date_step(message):
     try:
         id = message.from_user.id
@@ -107,6 +108,7 @@ def process_date_step(message):
         data['jobs'].append({'id' : job_id, 'type' : 'date'  , 'datetime' : datetime_obj , 'message' : reminder.msg}) 
         job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
 
+        bot.reply_to(message , 'Reminder added!')
         info('User {} added job'.format(id))
 
 
@@ -150,6 +152,7 @@ def scheduler_add_interval_job(time_type , interval , id):
             job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
 
             info('User {} added job'.format(id))
+            bot.send_message(id , 'Reminder added!')
 
         elif time_type == 'd':
             scheduler.add_job(send_message , 'interval' ,id=job_id ,  days=int(interval) , kwargs={'id':id  , 'message': reminder.msg})
@@ -158,6 +161,7 @@ def scheduler_add_interval_job(time_type , interval , id):
             job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
 
             info('User {} added job'.format(id))
+            bot.send_message(id , 'Reminder added!')
 
         elif time_type == 'h':
             scheduler.add_job(send_message , 'interval' ,id=job_id ,  hours=int(interval) , kwargs={'id':id  , 'message': reminder.msg})
@@ -166,12 +170,14 @@ def scheduler_add_interval_job(time_type , interval , id):
             job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
 
             info('User {} added job'.format(id))
+            bot.send_message(id , 'Reminder added!')
+            
+
 
     except Exception as e:
         print(e)
         bot.send_message(id , 'Www u so lucky , it is rare to happen this error')
-        #scheduler_add_interval_job(time_type , interval , id)
-
+        scheduler_add_interval_job(time_type , interval , id)
 
 # check reminder
 @bot.message_handler(commands=['check_re'])
@@ -183,7 +189,7 @@ def check(message):
 
     msg = 'Here is job scheduled : '+'\n'
     for job in data['jobs']:
-        msg += '{} : {}'.format(job['id'] , job['message']) + '\n'
+        msg += 'id : {}  \n message : {} \n type : {}'.format(job['id'] , job['message'] , job['type']) + '\n'
 
     bot.reply_to(message , msg)
 
@@ -191,19 +197,42 @@ def check(message):
 @bot.message_handler(commands=['remove_re'])
 def remove(message):
     check_ac(message.from_user)
-    text = message.text.split()[1]
-    
-    print(text)
 
     myquery = {'_id' : message.from_user.id}
     data = job_db.find_one(myquery)
 
-    for job in data['jobs']:
-        if text == job['id']:
-            data['jobs'].remove(job)
-            break
+    if len(data['jobs']) == 0:
+        bot.reply_to(message , 'No reminder!')
+        return ''
     
-    job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+
+    for job in data['jobs']:
+        markup.add(types.KeyboardButton('id : {},message : {}'.format(job['id'] , job['message'])))
+
+    bot.send_message(message.from_user.id , 'Which reminder u want to remove ?' , reply_markup = markup)            
+    bot.register_next_step_handler_by_chat_id(message.from_user.id , process_remove_step)
+    
+
+
+# remove the job
+def process_remove_step(message):
+    myquery = {'_id' : message.from_user.id}
+    data = job_db.find_one(myquery)
+
+    id = message.text.split(',')[0][5:]
+    print(id)
+    for job in data['jobs']:
+        if id == job['id']:
+            data['jobs'].remove(job)
+            job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
+
+            scheduler.remove_job(id)
+            info('User {} removed job'.format(message.from_user.id))
+            bot.send_message(message.from_user.id , 'Reminder removed!')
+            return ''
+
+    
 
 # start both job 
 if __name__ == "__main__":
