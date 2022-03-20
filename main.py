@@ -4,6 +4,7 @@ from pymongo import MongoClient
 from os import environ
 from telebot import TeleBot
 from threading import Thread
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
@@ -66,7 +67,7 @@ def process_msg_step(message):
     reminder.msg = message.text
     user_dict[message.from_user.id] = reminder
 
-    bot.send_message(message.from_user.id , 'interval or cron ?')
+    bot.send_message(message.from_user.id , 'date or interval or cron ?')
     bot.register_next_step_handler_by_chat_id(message.from_user.id , process_type_step)
     
     
@@ -79,9 +80,42 @@ def process_type_step(message):
     elif message.text == 'cron':
         pass
 
+    elif message.text == 'date':
+        bot.send_message(message.from_user.id , 'When to send? (E.g. d/m/y H:M -> 03/12/11 01:50)')
+        bot.register_next_step_handler_by_chat_id(message.from_user.id , process_date_step)
+
     else:
         bot.reply_to(message , 'Invalid input , pls try again')
         bot.register_next_step_handler_by_chat_id(message.from_user.id , process_type_step)
+
+def process_date_step(message):
+    try:
+        id = message.from_user.id
+        myquery = {'_id' : id}
+        data = job_db.find_one(myquery)
+
+        if len(data['jobs']) > 10:
+            bot.send_message(id , 'Maximum reminder reached')
+            return ''
+
+        job_id = str(id)+ '_' +str(uuid4()).replace('-','').upper()[0:4]
+
+        reminder = user_dict[id]
+
+        datetime_obj = datetime.strptime(message.text, '%d/%m/%y %H:%M')
+
+        scheduler.add_job(send_message , 'date' ,id=job_id ,  run_date = datetime_obj , kwargs={'id':id  , 'message': reminder.msg})
+
+        data['jobs'].append({'id' : job_id, 'type' : 'date'  , 'datetime' : datetime_obj , 'message' : reminder.msg}) 
+        job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
+
+        info('User {} added job'.format(id))
+
+
+    except Exception as e:
+        print(e)
+        bot.reply_to(message , 'Invalid input , pls try again')
+        bot.register_next_step_handler_by_chat_id(message.from_user.id , process_date_step)
 
 def process_interval_step(message):
     time_type = message.text.split()[0]
