@@ -9,6 +9,8 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 from uuid import uuid4
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot import types
 
 # logging config 
 basicConfig(level= INFO,
@@ -51,23 +53,19 @@ def add(message):
 
     bot.send_message(message.from_user.id , 'What is the message of the reminder ? (E.g. Watch k-on now)')
     bot.register_next_step_handler_by_chat_id(message.from_user.id , process_msg_step)
-    '''
-    text = message.text.split()[1:]
-    scheduler.add_job(send_message, 'interval', id='temp' , seconds=30 , kwargs={"id" : message.from_user.id , "message":str(text)})
-
-    myquery = {'_id' : message.from_user.id}
-    data = job_db.find_one(myquery)
-
-    data['jobs'].append({'id' : 'temp' , 'type' : 'interval' , 'seconds' : 30 , 'message' : str(text)}) 
-    job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
-    '''
-
+  
+  
 def process_msg_step(message):
     reminder = Reminder(message.from_user.id)
     reminder.msg = message.text
     user_dict[message.from_user.id] = reminder
 
-    bot.send_message(message.from_user.id , 'date or interval or cron ?')
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    markup.add(types.KeyboardButton("date"))
+    markup.add(types.KeyboardButton("interval"))
+    markup.add(types.KeyboardButton("cron"))
+
+    bot.send_message(message.from_user.id , 'date or interval or cron ?' , reply_markup = markup)
     bot.register_next_step_handler_by_chat_id(message.from_user.id , process_type_step)
     
     
