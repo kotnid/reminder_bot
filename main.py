@@ -27,8 +27,20 @@ botToken = environ['token']
 bot = TeleBot(botToken,  parse_mode=None)
 
 # function run when on time
-def send_message(id , message):
+def send_message(id , message , job_id):
     bot.send_message(id , message)
+
+    if scheduler.get_job(job_id) == None:
+        myquery = {'_id' : id}
+        data = job_db.find_one(myquery)
+
+        for job in data['jobs']:
+            if job_id == job['id']:
+                data['jobs'].remove(job)
+        
+        job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
+        info('Job removed')
+        
 
 # check if account is created 
 def check_ac(message):
@@ -106,7 +118,7 @@ def process_date_step(message):
 
         datetime_obj = datetime.strptime(message.text, '%d/%m/%y %H:%M')
 
-        scheduler.add_job(send_message , 'date' ,id=job_id ,  run_date = datetime_obj , kwargs={'id':id  , 'message': reminder.msg})
+        scheduler.add_job(send_message , 'date' ,id=job_id ,  run_date = datetime_obj , kwargs={'id':id  , 'message': reminder.msg , 'job_id' : job_id})
 
         data['jobs'].append({'id' : job_id, 'type' : 'date'  , 'datetime' : datetime_obj , 'message' : reminder.msg}) 
         job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
@@ -149,7 +161,7 @@ def scheduler_add_interval_job(time_type , interval , id):
 
     try:
         if time_type == 'w':
-            scheduler.add_job(send_message , 'interval' ,id=job_id ,  weeks=int(interval) , kwargs={'id':id  , 'message': reminder.msg})
+            scheduler.add_job(send_message , 'interval' ,id=job_id ,  weeks=int(interval) , kwargs={'id':id  , 'message': reminder.msg , 'job_id' : job_id})
 
             data['jobs'].append({'id' : job_id, 'type' : 'interval'  , 'arg' : 'weeks' , 'amount' : interval, 'message' : reminder.msg}) 
             job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
@@ -158,7 +170,7 @@ def scheduler_add_interval_job(time_type , interval , id):
             bot.send_message(id , 'Reminder added!')
 
         elif time_type == 'd':
-            scheduler.add_job(send_message , 'interval' ,id=job_id ,  days=int(interval) , kwargs={'id':id  , 'message': reminder.msg})
+            scheduler.add_job(send_message , 'interval' ,id=job_id ,  days=int(interval) , kwargs={'id':id  , 'message': reminder.msg , 'job_id' : job_id})
 
             data['jobs'].append({'id' : job_id, 'type' : 'interval'  , 'arg' : 'days' , 'amount' : interval, 'message' : reminder.msg}) 
             job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
@@ -167,7 +179,7 @@ def scheduler_add_interval_job(time_type , interval , id):
             bot.send_message(id , 'Reminder added!')
 
         elif time_type == 'h':
-            scheduler.add_job(send_message , 'interval' ,id=job_id ,  hours=int(interval) , kwargs={'id':id  , 'message': reminder.msg})
+            scheduler.add_job(send_message , 'interval' ,id=job_id ,  hours=int(interval) , kwargs={'id':id  , 'message': reminder.msg , 'job_id' : job_id})
 
             data['jobs'].append({'id' : job_id, 'type' : 'interval'  , 'arg' : 'hours' , 'amount' : interval, 'message' : reminder.msg}) 
             job_db.update_one({'_id' : id} , {'$set' : {'jobs' : data['jobs']}})
@@ -232,7 +244,7 @@ def add_cron_job(message):
         job_id = str(message.from_user.id)+ '_' +str(uuid4()).replace('-','').upper()[0:4]
 
         try:
-            scheduler.add_job(send_message , 'cron' ,id=job_id ,  minute=crontab[0] , hour=crontab[1] , day=crontab[2] , month=crontab[3] , day_of_week=crontab[4] , start_date = reminder.start_date , end_date = reminder.end_date , kwargs={'id':message.from_user.id  , 'message': reminder.msg})
+            scheduler.add_job(send_message , 'cron' ,id=job_id ,  minute=crontab[0] , hour=crontab[1] , day=crontab[2] , month=crontab[3] , day_of_week=crontab[4] , start_date = reminder.start_date , end_date = reminder.end_date , kwargs={'id':message.from_user.id  , 'message': reminder.msg , 'job_id' : job_id})
 
             data['jobs'].append({'id' : job_id, 'type' : 'cron'  , 'arg' : 'hours' , 'amount' : crontab, 'start_date' : reminder.start_date ,'end_date' : reminder.end_date , 'message' : reminder.msg}) 
             job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
