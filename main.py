@@ -1,4 +1,4 @@
-from calendar import week
+from calendar import month, week
 from logging import info , basicConfig , INFO
 from pymongo import MongoClient
 from os import environ
@@ -44,6 +44,8 @@ class Reminder:
     def __init__ (self , id):
         self.id = id
         self.msg = None
+        self.start_date = None
+        self.end_date = None
 
 user_dict = {}
 
@@ -76,7 +78,8 @@ def process_type_step(message):
         bot.register_next_step_handler_by_chat_id(message.from_user.id , process_interval_step)
 
     elif message.text == 'cron':
-        pass
+        bot.send_message(message.from_user.id , 'When is the start date? (E.g. d/m/y H:M -> 03/12/11 01:50)')
+        bot.register_next_step_handler_by_chat_id(message.from_user.id , process_cron_step)
 
     elif message.text == 'date':
         bot.send_message(message.from_user.id , 'When to send? (E.g. d/m/y H:M -> 03/12/11 01:50)')
@@ -178,6 +181,71 @@ def scheduler_add_interval_job(time_type , interval , id):
         print(e)
         bot.send_message(id , 'Www u so lucky , it is rare to happen this error')
         scheduler_add_interval_job(time_type , interval , id)
+
+def process_cron_step(message):
+    try:
+        datetime_obj = datetime.strptime(message.text, '%d/%m/%y %H:%M')
+        reminder = user_dict[message.from_user.id]
+        reminder.start_date = datetime_obj
+
+    except:
+        bot.reply_to(message , 'Invalid input , pls try again')
+        bot.register_next_step_handler_by_chat_id(message.from_user.id , process_cron_step)
+        return ''
+
+    bot.send_message(message.from_user.id , 'When is the end date? (E.g. d/m/y H:M -> 03/12/11 01:50)')
+    bot.register_next_step_handler_by_chat_id(message.from_user.id , process_cron_step_2)
+
+def process_cron_step_2(message):
+    try:
+        datetime_obj = datetime.strptime(message.text, '%d/%m/%y %H:%M')
+        reminder = user_dict[message.from_user.id]
+        reminder.end_date = datetime_obj
+
+    except Exception as e:
+        print(e)
+        bot.reply_to(message , 'Invalid input , pls try again')
+        bot.register_next_step_handler_by_chat_id(message.from_user.id , add_cron_job)
+        return ''
+
+    bot.send_message(message.from_user.id , 'What is the crontab? (U can use https://crontab.guru/ to help u)')
+    bot.register_next_step_handler_by_chat_id(message.from_user.id , add_cron_job)
+
+
+def add_cron_job(message):
+    crontab = message.text.split()
+
+    if len(crontab) != 5:
+        bot.reply_to(message , 'Invalid input , pls try again')
+        bot.register_next_step_handler_by_chat_id(message.from_user.id , add_cron_job)
+    
+    else:
+        myquery = {'_id' : message.from_user.id}
+        data = job_db.find_one(myquery)
+
+        if len(data['jobs']) > 10:
+            bot.send_message(message.from_user.id , 'Maximum reminder reached')
+            return ''
+
+        reminder = user_dict[message.from_user.id]
+
+        job_id = str(message.from_user.id)+ '_' +str(uuid4()).replace('-','').upper()[0:4]
+
+        try:
+            scheduler.add_job(send_message , 'cron' ,id=job_id ,  minute=crontab[0] , hour=crontab[1] , day=crontab[2] , month=crontab[3] , day_of_week=crontab[4] , start_date = reminder.start_date , end_date = reminder.end_date , kwargs={'id':message.from_user.id  , 'message': reminder.msg})
+
+            data['jobs'].append({'id' : job_id, 'type' : 'cron'  , 'arg' : 'hours' , 'amount' : crontab, 'start_date' : reminder.start_date ,'end_date' : reminder.end_date , 'message' : reminder.msg}) 
+            job_db.update_one({'_id' : message.from_user.id} , {'$set' : {'jobs' : data['jobs']}})
+
+            info('User {} added job'.format(message.from_user.id))
+            bot.send_message(message.from_user.id , 'Reminder added!')
+
+        except Exception as e:
+            print(e)
+            bot.reply_to(message , 'Oof error occur')
+    
+
+
 
 # check reminder
 @bot.message_handler(commands=['check_re'])
