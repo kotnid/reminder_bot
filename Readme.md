@@ -2,7 +2,7 @@
 
 ## Add reminder at telegram ! ##
 
-[bot invite link](https://t.me/tkt_test_2_bot)
+[bot invite link](https://t.me/tkt_reminder_bot)
 
 ## set up ##
 1. ```pip install -r requirements.txt```
@@ -13,6 +13,10 @@
 2. Use /check_re to check reminder
 3. Use /remove_re to remove reminder
 
+## To-do list ##
+1. add jobstore
+2. fix timezone
+3. allow user edit reminder
 
 ## Credit ##
 - [rain2wood](https://github.com/rain2wood) for giving suggestion and inspiration
